@@ -7,6 +7,7 @@ use std::{
     io::{stdout, Error, ErrorKind},
 };
 
+use bytesize::ByteSize;
 use clap::Parser;
 use crossterm::{
     cursor,
@@ -285,10 +286,6 @@ impl Screen {
             terminal::Clear(terminal::ClearType::CurrentLine)
         )?;
 
-        if !self.editor.saved {
-            write!(self.stdout, "[+]")?;
-        }
-
         let mode = self.editor_mode.to_string();
         queue!(
             self.stdout,
@@ -296,8 +293,21 @@ impl Screen {
         )?;
         write!(self.stdout, "{}", &mode)?;
 
-        self.editor.cursor_nibble =
-            cmp::min(2 * self.editor.file_size() - 1, self.editor.cursor_nibble);
+        queue!(self.stdout, cursor::MoveTo(0, self.height as u16 - 1))?;
+        queue!(
+            self.stdout,
+            terminal::Clear(terminal::ClearType::CurrentLine)
+        )?;
+        write!(
+            self.stdout,
+            "[{}] {}",
+            self.editor.filename,
+            ByteSize::b(self.editor.file_size() as u64)
+        )?;
+
+        if !self.editor.saved {
+            write!(self.stdout, " [+]")?;
+        }
 
         self.draw_cursor()?;
 
@@ -307,9 +317,7 @@ impl Screen {
     }
 
     pub fn cycle_editor_mode(&mut self) -> Result<(), io::Error> {
-        self.editor_mode = self.editor_mode.next();
-        self.editor.cursor_nibble -= self.editor.cursor_nibble % 2;
-        self.draw()
+        self.set_editor_mode(self.editor_mode.next())
     }
 
     pub fn set_editor_mode(&mut self, editor_mode: EditorMode) -> Result<(), io::Error> {
