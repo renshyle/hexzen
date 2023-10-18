@@ -111,51 +111,46 @@ impl Screen {
         loop {
             match read()? {
                 Event::Key(event) => match event.code {
-                    KeyCode::Char(c) => {
-                        if let ' '..='~' = c {
-                            match self.editor_mode {
-                                EditorMode::HexMode => match c {
-                                    'a'..='f' | '0'..='9' => {
-                                        let nibble =
-                                            u8::from_str_radix(&String::from(c), 16).unwrap();
-                                        self.editor.write_nibble(nibble)?;
-                                        self.move_cursor(CursorMovementType::Right)?;
-                                    }
-                                    'u' | 'z' => {
-                                        let undid = self.editor.undo();
+                    KeyCode::Char(c) => match self.editor_mode {
+                        EditorMode::HexMode => match c {
+                            'a'..='f' | '0'..='9' => {
+                                let nibble = u8::from_str_radix(&String::from(c), 16).unwrap();
+                                self.editor.write_nibble(nibble)?;
+                                self.move_cursor(CursorMovementType::Right)?;
+                            }
+                            'u' | 'z' => {
+                                let undid = self.editor.undo();
 
-                                        if undid {
-                                            self.draw()?;
-                                        }
-                                    }
-                                    'r' => {
-                                        let redid = self.editor.redo();
-
-                                        if redid {
-                                            self.draw()?;
-                                        }
-                                    }
-                                    'w' => {
-                                        if let Err(e) = self.editor.save() {
-                                            eprintln!("unable to save file: {:?}", e);
-                                        }
-
-                                        self.draw()?;
-                                    }
-                                    'q' => {
-                                        break;
-                                    }
-                                    _ => {}
-                                },
-                                EditorMode::TextMode => {
-                                    if let ' '..='~' = c {
-                                        self.editor.write_byte(c.to_string().as_bytes()[0])?;
-                                        self.move_cursor(CursorMovementType::Right)?;
-                                    }
+                                if undid {
+                                    self.draw()?;
                                 }
                             }
+                            'r' => {
+                                let redid = self.editor.redo();
+
+                                if redid {
+                                    self.draw()?;
+                                }
+                            }
+                            'w' => {
+                                if let Err(e) = self.editor.save() {
+                                    eprintln!("unable to save file: {:?}", e);
+                                }
+
+                                self.draw()?;
+                            }
+                            'q' => {
+                                break;
+                            }
+                            _ => {}
+                        },
+                        EditorMode::TextMode => {
+                            if let ' '..='~' = c {
+                                self.editor.write_byte(c.to_string().as_bytes()[0])?;
+                                self.move_cursor(CursorMovementType::Right)?;
+                            }
                         }
-                    }
+                    },
                     KeyCode::Right => {
                         self.move_cursor(CursorMovementType::Right)?;
                     }
