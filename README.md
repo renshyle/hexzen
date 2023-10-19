@@ -30,3 +30,4 @@ Options:
 * `r`: redo
 * `w`: save changes
 * `q`: exit the program without saving
+* `j`: jump to an arbitrary position in the file
