@@ -19,6 +19,7 @@ type InputReadCallback = Box<dyn FnMut(&mut Screen, &str)>;
 
 pub struct Screen {
     editor: FileEditor,
+    running: bool,
     stdout: Stdout,
     width: isize,
     height: isize,
@@ -48,6 +49,7 @@ impl Screen {
 
         Ok(Screen {
             editor,
+            running: true,
             stdout,
             width: width.try_into().unwrap(),
             height: height.try_into().unwrap(),
@@ -66,7 +68,7 @@ impl Screen {
         queue!(self.stdout, terminal::Clear(terminal::ClearType::All))?;
         self.draw()?;
 
-        loop {
+        while self.running {
             match event::read()? {
                 Event::Key(event) => match self.screen_mode {
                     ScreenMode::EditMode => match event.code {
@@ -111,7 +113,20 @@ impl Screen {
                                     )?;
                                 }
                                 'q' => {
-                                    break;
+                                    if self.editor.saved {
+                                        self.running = false;
+                                    } else {
+                                        self.read_user_input(
+                                            String::from("quit without saving? "),
+                                            Box::new(|screen: &mut Screen, input: &str| {
+                                                if input.eq_ignore_ascii_case("yes")
+                                                    || input.eq_ignore_ascii_case("y")
+                                                {
+                                                    screen.running = false;
+                                                }
+                                            }),
+                                        )?;
+                                    }
                                 }
                                 _ => {}
                             },
