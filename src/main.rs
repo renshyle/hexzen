@@ -8,6 +8,7 @@ use clap::Parser;
 use screen::Screen;
 
 mod screen;
+mod search;
 
 pub const BYTES_PER_ROW: isize = 16;
 

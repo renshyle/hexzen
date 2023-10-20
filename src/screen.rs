@@ -11,7 +11,10 @@ use std::{char, cmp};
 
 use bytesize::ByteSize;
 
-use crate::{Config, CursorMovementType, EditorMode, FileEditor, BYTES_PER_ROW};
+use crate::{
+    search::{self, SearchResults},
+    Config, CursorMovementType, EditorMode, FileEditor, BYTES_PER_ROW,
+};
 
 const SCREEN_WIDTH: usize = 80;
 
@@ -28,6 +31,7 @@ pub struct Screen {
     input_buffer: Vec<char>,
     input_callback: Option<InputReadCallback>,
     input_prefix: String,
+    search_results: Option<SearchResults>,
     config: Config,
 }
 
@@ -58,6 +62,7 @@ impl Screen {
             input_buffer: Vec::new(),
             input_callback: None,
             input_prefix: String::new(),
+            search_results: None,
             config,
         })
     }
@@ -111,6 +116,36 @@ impl Screen {
                                             }
                                         }),
                                     )?;
+                                }
+                                '/' => {
+                                    self.search_results = None;
+
+                                    self.read_user_input(
+                                        String::from("/"),
+                                        Box::new(|screen: &mut Screen, input: &str| {
+                                            screen.search_results =
+                                                search::search(&screen.editor.buffer, input);
+
+                                            if let Some(results) = &screen.search_results {
+                                                screen.editor.cursor_nibble =
+                                                    2 * results.result() as isize;
+                                            }
+                                        }),
+                                    )?;
+                                }
+                                'n' => {
+                                    if let Some(search_results) = &mut self.search_results {
+                                        self.editor.cursor_nibble =
+                                            2 * search_results.next() as isize;
+                                        self.draw()?;
+                                    }
+                                }
+                                'm' => {
+                                    if let Some(search_results) = &mut self.search_results {
+                                        self.editor.cursor_nibble =
+                                            2 * search_results.prev() as isize;
+                                        self.draw()?;
+                                    }
                                 }
                                 'q' => {
                                     if self.editor.saved {
@@ -337,6 +372,15 @@ impl Screen {
 
                 if !self.editor.saved {
                     write!(self.stdout, " [+]")?;
+                }
+
+                if let Some(search_results) = &self.search_results {
+                    write!(
+                        self.stdout,
+                        " [{}/{}]",
+                        search_results.idx() + 1,
+                        search_results.len()
+                    )?;
                 }
             }
             ScreenMode::CommandMode => {

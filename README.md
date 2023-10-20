@@ -31,3 +31,7 @@ Options:
 * `w`: save changes
 * `q`: exit the program without saving
 * `j`: jump to an arbitrary position in the file
+* `/`: search for specific bytes in the file
+* `//`: search for specific text in the file
+* `n`: jump to next search result
+* `m`: jump to previous search result
