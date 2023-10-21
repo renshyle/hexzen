@@ -1,7 +1,8 @@
 use core::fmt;
 use std::{
     char::{self, REPLACEMENT_CHARACTER},
-    cmp, fs, io,
+    cmp, fs,
+    io::{self, stdin, Read},
 };
 
 use clap::Parser;
@@ -166,7 +167,13 @@ impl FileEditor {
 }
 
 fn hexdump(file: &str, config: Config) -> Result<(), io::Error> {
-    let buffer = fs::read(file)?;
+    let buffer = if file == "-" {
+        let mut buf = Vec::new();
+        stdin().lock().read_to_end(&mut buf)?;
+        buf
+    } else {
+        fs::read(file)?
+    };
     let rows = (buffer.len() as isize + BYTES_PER_ROW - 1) / BYTES_PER_ROW;
 
     println!("            00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f\n");
