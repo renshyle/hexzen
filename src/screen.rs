@@ -9,6 +9,7 @@ use crossterm::{
     execute, queue, style, terminal,
     tty::IsTty,
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use std::{char, cmp};
 
@@ -31,7 +32,7 @@ pub struct Screen {
     height: usize,
     editor_mode: EditorMode,
     screen_mode: ScreenMode,
-    input_buffer: Vec<char>,
+    input_buffer: String,
     input_callback: Option<InputReadCallback>,
     input_prefix: String,
     search_results: Option<SearchResults>,
@@ -62,7 +63,7 @@ impl Screen {
             height: height.into(),
             editor_mode: EditorMode::HexMode,
             screen_mode: ScreenMode::EditMode,
-            input_buffer: Vec::new(),
+            input_buffer: String::new(),
             input_callback: None,
             input_prefix: String::new(),
             search_results: None,
@@ -210,17 +211,12 @@ impl Screen {
                             self.draw()?;
                         }
                         KeyCode::Backspace => {
-                            if self.input_buffer.is_empty() {
-                                self.screen_mode = ScreenMode::EditMode;
-                            } else {
-                                self.input_buffer.remove(self.input_buffer.len() - 1);
-                            }
+                            self.input_buffer.pop();
 
                             self.draw()?;
                         }
                         KeyCode::Enter => {
-                            let command: String =
-                                mem::take(&mut self.input_buffer).into_iter().collect();
+                            let command = mem::take(&mut self.input_buffer);
 
                             let callback = self.input_callback.take();
                             if let Some(mut callback) = callback {
@@ -432,15 +428,34 @@ impl Screen {
                 }
             }
             ScreenMode::CommandMode => {
+                let prefix_width = self.input_prefix.width() + 1;
+                let mut i = 0;
+                let chars = self.input_buffer.chars();
+
+                // find the character index where the width of the end of the text is small enough to be shown on screen
+                while chars
+                    .clone()
+                    .skip(i)
+                    .map(|c| c.width().unwrap())
+                    .sum::<usize>()
+                    + prefix_width
+                    > self.width
+                {
+                    i += 1;
+                }
+
+                let start = self
+                    .input_buffer
+                    .char_indices()
+                    .nth(i)
+                    .unwrap_or((0, '\x00'))
+                    .0;
+
                 write!(
                     self.stdout,
                     "{}{}",
                     self.input_prefix,
-                    self.input_buffer[(self.input_buffer.len() + self.input_prefix.len() + 1)
-                        .saturating_sub(self.width)
-                        ..self.input_buffer.len()]
-                        .iter()
-                        .collect::<String>()
+                    &self.input_buffer[start..]
                 )?;
             }
         }
@@ -479,10 +494,10 @@ impl Screen {
                 self.editor.cursor_nibble += xmov;
             }
             CursorMovementType::Left => {
-                self.editor.cursor_nibble -= xmov;
+                self.editor.cursor_nibble = self.editor.cursor_nibble.saturating_sub(xmov);
             }
             CursorMovementType::Up => {
-                self.editor.cursor_nibble -= ymov;
+                self.editor.cursor_nibble = self.editor.cursor_nibble.saturating_sub(ymov);
             }
             CursorMovementType::Down => {
                 self.editor.cursor_nibble += ymov;
@@ -512,7 +527,7 @@ impl Screen {
         let (x, y) = match self.screen_mode {
             ScreenMode::EditMode => self.coords_for_cursor(),
             ScreenMode::CommandMode => (
-                (self.input_prefix.len() + self.input_buffer.len()),
+                self.input_prefix.width() + self.input_buffer.width(),
                 self.height - 1,
             ),
         };
