@@ -40,7 +40,7 @@ impl SearchResults {
     }
 
     pub fn prev(&mut self) -> usize {
-        self.i = if self.i == 0 { 0 } else { self.i - 1 };
+        self.i = self.i.saturating_sub(1);
         self.results[self.i]
     }
 

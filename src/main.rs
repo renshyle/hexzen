@@ -11,7 +11,7 @@ use screen::Screen;
 mod screen;
 mod search;
 
-pub const BYTES_PER_ROW: isize = 16;
+pub const BYTES_PER_ROW: usize = 16;
 
 enum CursorMovementType {
     Right,
@@ -53,8 +53,8 @@ impl fmt::Display for EditorMode {
 struct FileEditor {
     buffer: Vec<u8>,
     filename: String,
-    offset: isize,
-    cursor_nibble: isize,
+    offset: usize,
+    cursor_nibble: usize,
     saved: bool,
     undo_stack: Vec<Edit>,
     redo_stack: Vec<Edit>,
@@ -81,17 +81,16 @@ impl FileEditor {
         })
     }
 
-    pub fn file_size(&self) -> isize {
-        self.buffer.len() as isize
+    pub fn file_size(&self) -> usize {
+        self.buffer.len()
     }
 
     pub fn read_bytes(&self, size: usize) -> &[u8] {
-        &self.buffer
-            [self.offset as usize..=cmp::min(self.offset as usize + size, self.buffer.len() - 1)]
+        &self.buffer[self.offset..=cmp::min(self.offset + size, self.buffer.len() - 1)]
     }
 
     pub fn write_nibble(&mut self, nibble: u8) -> Result<(), io::Error> {
-        let position = (self.cursor_nibble / 2) as usize;
+        let position = self.cursor_nibble / 2;
         let byte = self.buffer[position];
 
         let new_byte = if self.cursor_nibble % 2 == 0 {
@@ -106,14 +105,14 @@ impl FileEditor {
             new_byte,
         });
 
-        self.buffer[(self.cursor_nibble / 2) as usize] = new_byte;
+        self.buffer[self.cursor_nibble / 2] = new_byte;
         self.saved = false;
 
         Ok(())
     }
 
     pub fn write_byte(&mut self, byte: u8) -> Result<(), io::Error> {
-        let position = (self.cursor_nibble / 2) as usize;
+        let position = self.cursor_nibble / 2;
 
         self.push_undo(Edit {
             position,
@@ -135,7 +134,7 @@ impl FileEditor {
     pub fn undo(&mut self) -> bool {
         if let Some(edit) = self.undo_stack.pop() {
             self.buffer[edit.position] = edit.prev_byte;
-            self.cursor_nibble = 2 * edit.position as isize;
+            self.cursor_nibble = 2 * edit.position;
             self.redo_stack.push(edit);
             self.saved = false;
 
@@ -148,7 +147,7 @@ impl FileEditor {
     pub fn redo(&mut self) -> bool {
         if let Some(edit) = self.redo_stack.pop() {
             self.buffer[edit.position] = edit.new_byte;
-            self.cursor_nibble = 2 * edit.position as isize;
+            self.cursor_nibble = 2 * edit.position;
             self.undo_stack.push(edit);
             self.saved = false;
 
@@ -174,7 +173,7 @@ fn hexdump(file: &str, config: Config) -> Result<(), io::Error> {
     } else {
         fs::read(file)?
     };
-    let rows = (buffer.len() as isize + BYTES_PER_ROW - 1) / BYTES_PER_ROW;
+    let rows = (buffer.len() + BYTES_PER_ROW - 1) / BYTES_PER_ROW;
 
     println!("            00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f\n");
 
@@ -186,10 +185,10 @@ fn hexdump(file: &str, config: Config) -> Result<(), io::Error> {
                 print!(" ");
             }
 
-            if row * BYTES_PER_ROW + col >= buffer.len() as isize {
+            if row * BYTES_PER_ROW + col >= buffer.len() {
                 print!("   ");
             } else {
-                let c = buffer[(row * BYTES_PER_ROW + col) as usize];
+                let c = buffer[row * BYTES_PER_ROW + col];
 
                 print!("{:02x} ", c);
             }
@@ -198,8 +197,8 @@ fn hexdump(file: &str, config: Config) -> Result<(), io::Error> {
         print!("  ");
 
         for col in 0..BYTES_PER_ROW {
-            if row * BYTES_PER_ROW + col < buffer.len() as isize {
-                let mut c = buffer[(row * BYTES_PER_ROW + col) as usize] as char;
+            if row * BYTES_PER_ROW + col < buffer.len() {
+                let mut c = buffer[row * BYTES_PER_ROW + col] as char;
 
                 if !(32..=126).contains(&(c as u8)) {
                     c = config.replacement_char;

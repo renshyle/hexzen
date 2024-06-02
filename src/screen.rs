@@ -1,4 +1,7 @@
-use std::io::{self, stdout, ErrorKind, Stdout, Write};
+use std::{
+    io::{self, stdout, ErrorKind, Stdout, Write},
+    mem,
+};
 
 use crossterm::{
     cursor,
@@ -24,8 +27,8 @@ pub struct Screen {
     editor: FileEditor,
     running: bool,
     stdout: Stdout,
-    width: isize,
-    height: isize,
+    width: usize,
+    height: usize,
     editor_mode: EditorMode,
     screen_mode: ScreenMode,
     input_buffer: Vec<char>,
@@ -55,8 +58,8 @@ impl Screen {
             editor,
             running: true,
             stdout,
-            width: width.try_into().unwrap(),
-            height: height.try_into().unwrap(),
+            width: width.into(),
+            height: height.into(),
             editor_mode: EditorMode::HexMode,
             screen_mode: ScreenMode::EditMode,
             input_buffer: Vec::new(),
@@ -80,7 +83,7 @@ impl Screen {
                         KeyCode::Char(c) => match self.editor_mode {
                             EditorMode::HexMode => match c {
                                 'a'..='f' | '0'..='9' => {
-                                    let nibble = u8::from_str_radix(&String::from(c), 16).unwrap();
+                                    let nibble = hex_char_to_u8(c).unwrap();
                                     self.editor.write_nibble(nibble)?;
                                     self.move_cursor(CursorMovementType::Right)?;
                                 }
@@ -111,7 +114,7 @@ impl Screen {
                                         Box::new(|screen: &mut Screen, mut input: &str| {
                                             input = input.strip_prefix("0x").unwrap_or(input);
 
-                                            if let Ok(address) = isize::from_str_radix(input, 16) {
+                                            if let Ok(address) = usize::from_str_radix(input, 16) {
                                                 screen.editor.cursor_nibble = 2 * address;
                                             }
                                         }),
@@ -127,23 +130,20 @@ impl Screen {
                                                 search::search(&screen.editor.buffer, input);
 
                                             if let Some(results) = &screen.search_results {
-                                                screen.editor.cursor_nibble =
-                                                    2 * results.result() as isize;
+                                                screen.editor.cursor_nibble = 2 * results.result();
                                             }
                                         }),
                                     )?;
                                 }
                                 'n' => {
                                     if let Some(search_results) = &mut self.search_results {
-                                        self.editor.cursor_nibble =
-                                            2 * search_results.next() as isize;
+                                        self.editor.cursor_nibble = 2 * search_results.next();
                                         self.draw()?;
                                     }
                                 }
                                 'm' => {
                                     if let Some(search_results) = &mut self.search_results {
-                                        self.editor.cursor_nibble =
-                                            2 * search_results.prev() as isize;
+                                        self.editor.cursor_nibble = 2 * search_results.prev();
                                         self.draw()?;
                                     }
                                 }
@@ -167,7 +167,7 @@ impl Screen {
                             },
                             EditorMode::TextMode => {
                                 if let ' '..='~' = c {
-                                    self.editor.write_byte(c.to_string().as_bytes()[0])?;
+                                    self.editor.write_byte(c as u8)?;
                                     self.move_cursor(CursorMovementType::Right)?;
                                 }
                             }
@@ -219,7 +219,8 @@ impl Screen {
                             self.draw()?;
                         }
                         KeyCode::Enter => {
-                            let command = self.input_buffer.iter().collect::<String>();
+                            let command: String =
+                                mem::take(&mut self.input_buffer).into_iter().collect();
 
                             let callback = self.input_callback.take();
                             if let Some(mut callback) = callback {
@@ -227,15 +228,14 @@ impl Screen {
                             }
 
                             self.screen_mode = ScreenMode::EditMode;
-                            self.input_buffer.clear();
                             self.draw()?;
                         }
                         _ => {}
                     },
                 },
                 Event::Resize(new_width, new_height) => {
-                    self.width = new_width.try_into().unwrap();
-                    self.height = new_height.try_into().unwrap();
+                    self.width = new_width.into();
+                    self.height = new_height.into();
 
                     queue!(self.stdout, terminal::Clear(terminal::ClearType::All))?;
                     self.draw()?;
@@ -288,9 +288,7 @@ impl Screen {
             self.editor.file_size() - self.editor.file_size() % BYTES_PER_ROW,
         );
 
-        let buf = self
-            .editor
-            .read_bytes((BYTES_PER_ROW * (self.height - 4)) as usize);
+        let buf = self.editor.read_bytes(BYTES_PER_ROW * (self.height - 4));
 
         let data_rows = cmp::min(
             self.height - 4,
@@ -316,7 +314,7 @@ impl Screen {
                 if self.editor.offset + row * BYTES_PER_ROW + col >= self.editor.file_size() {
                     write!(self.stdout, " ")?;
                 } else {
-                    let mut c = buf[(row * BYTES_PER_ROW + col) as usize] as char;
+                    let mut c = buf[row * BYTES_PER_ROW + col] as char;
 
                     if !(32..=126).contains(&(c as u8)) {
                         c = self.config.replacement_char;
@@ -331,7 +329,7 @@ impl Screen {
                 if self.editor.offset + row * BYTES_PER_ROW + col >= self.editor.file_size() {
                     write!(self.stdout, "   ")?;
                 } else {
-                    let c = buf[(row * BYTES_PER_ROW + col) as usize];
+                    let c = buf[row * BYTES_PER_ROW + col];
 
                     if col == 8 {
                         write!(self.stdout, " ")?;
@@ -388,11 +386,9 @@ impl Screen {
                     self.stdout,
                     "{}{}",
                     self.input_prefix,
-                    self.input_buffer[cmp::max(
-                        self.input_buffer.len() as isize
-                            - (self.width - 1 - self.input_prefix.len() as isize),
-                        0
-                    ) as usize..self.input_buffer.len()]
+                    self.input_buffer[(self.input_buffer.len() + self.input_prefix.len() + 1)
+                        .saturating_sub(self.width)
+                        ..self.input_buffer.len()]
                         .iter()
                         .collect::<String>()
                 )?;
@@ -442,8 +438,14 @@ impl Screen {
                 self.editor.cursor_nibble += ymov;
             }
             CursorMovementType::PageUp => {
-                self.editor.cursor_nibble -= ymov * (self.height - 4);
-                self.editor.offset -= (self.height - 4) * BYTES_PER_ROW;
+                self.editor.cursor_nibble = self
+                    .editor
+                    .cursor_nibble
+                    .saturating_sub(ymov * (self.height - 4));
+                self.editor.offset = self
+                    .editor
+                    .offset
+                    .saturating_sub((self.height - 4) * BYTES_PER_ROW);
             }
             CursorMovementType::PageDown => {
                 self.editor.cursor_nibble += ymov * (self.height - 4);
@@ -460,7 +462,7 @@ impl Screen {
         let (x, y) = match self.screen_mode {
             ScreenMode::EditMode => self.coords_for_cursor(),
             ScreenMode::CommandMode => (
-                (self.input_prefix.len() + self.input_buffer.len()) as isize,
+                (self.input_prefix.len() + self.input_buffer.len()),
                 self.height - 1,
             ),
         };
@@ -470,7 +472,7 @@ impl Screen {
         )
     }
 
-    fn coords_for_cursor(&self) -> (isize, isize) {
+    fn coords_for_cursor(&self) -> (usize, usize) {
         let nibble_wo_offset = self.editor.cursor_nibble - 2 * self.editor.offset;
 
         match self.editor_mode {
@@ -499,5 +501,15 @@ impl Drop for Screen {
     fn drop(&mut self) {
         terminal::disable_raw_mode().unwrap();
         execute!(self.stdout, terminal::LeaveAlternateScreen).unwrap();
+    }
+}
+
+fn hex_char_to_u8(c: char) -> Option<u8> {
+    let i = c as u8;
+
+    match c {
+        '0'..='9' => Some(i - b'0'),
+        'a'..='f' => Some(i - b'a' + 10),
+        _ => None,
     }
 }
