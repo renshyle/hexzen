@@ -6,7 +6,7 @@ use std::{
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode},
-    execute, queue, terminal,
+    execute, queue, style, terminal,
     tty::IsTty,
 };
 
@@ -311,7 +311,9 @@ impl Screen {
 
             queue!(self.stdout, cursor::MoveTo(63, y))?;
             for col in 0..BYTES_PER_ROW {
-                if self.editor.offset + row * BYTES_PER_ROW + col >= self.editor.file_size() {
+                let offset = self.editor.offset + row * BYTES_PER_ROW + col;
+
+                if offset >= self.editor.file_size() {
                     write!(self.stdout, " ")?;
                 } else {
                     let mut c = buf[row * BYTES_PER_ROW + col] as char;
@@ -320,22 +322,70 @@ impl Screen {
                         c = self.config.replacement_char;
                     }
 
-                    write!(self.stdout, "{}", c)?;
+                    let match_len = self
+                        .search_results
+                        .as_ref()
+                        .and_then(|res| res.match_len(offset));
+                    let highlight = self.config.highlight_colors.is_some() && match_len.is_some();
+
+                    if highlight {
+                        queue!(
+                            self.stdout,
+                            style::SetColors(self.config.highlight_colors.unwrap())
+                        )?;
+                        write!(self.stdout, "{}", c)?;
+                        queue!(self.stdout, style::ResetColor)?;
+                    } else {
+                        write!(self.stdout, "{}", c)?;
+                    }
                 }
             }
 
             queue!(self.stdout, cursor::MoveTo(12, y))?;
             for col in 0..BYTES_PER_ROW {
-                if self.editor.offset + row * BYTES_PER_ROW + col >= self.editor.file_size() {
+                let offset = self.editor.offset + row * BYTES_PER_ROW + col;
+
+                if offset >= self.editor.file_size() {
                     write!(self.stdout, "   ")?;
                 } else {
                     let c = buf[row * BYTES_PER_ROW + col];
 
-                    if col == 8 {
-                        write!(self.stdout, " ")?;
-                    }
+                    let match_len = self
+                        .search_results
+                        .as_ref()
+                        .and_then(|res| res.match_len(offset));
+                    let highlight = self.config.highlight_colors.is_some() && match_len.is_some();
 
-                    write!(self.stdout, "{:02x} ", c)?;
+                    if highlight {
+                        queue!(
+                            self.stdout,
+                            style::SetColors(self.config.highlight_colors.unwrap())
+                        )?;
+                        if col == BYTES_PER_ROW - 1 || match_len.unwrap() == 1 {
+                            write!(self.stdout, "{:02x}", c)?;
+                            queue!(self.stdout, style::ResetColor)?;
+
+                            if col == 7 {
+                                write!(self.stdout, "  ")?;
+                            } else {
+                                write!(self.stdout, " ")?;
+                            }
+                        } else {
+                            write!(self.stdout, "{:02x} ", c)?;
+
+                            if col == 7 {
+                                write!(self.stdout, " ")?;
+                            }
+
+                            queue!(self.stdout, style::ResetColor)?;
+                        }
+                    } else {
+                        write!(self.stdout, "{:02x} ", c)?;
+
+                        if col == 7 {
+                            write!(self.stdout, " ")?;
+                        }
+                    }
                 };
             }
         }

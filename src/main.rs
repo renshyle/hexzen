@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::Parser;
+use crossterm::style::{Color, Colors};
 use screen::Screen;
 
 mod screen;
@@ -225,10 +226,13 @@ struct Args {
         help = "use the unicode replacement character instead of a dot when a character isn't printable ascii"
     )]
     unicode_replacement_char: bool,
+    #[arg(short = 'c', long, help = "disables the use of colors in the editor")]
+    no_colors: bool,
 }
 
 pub struct Config {
     replacement_char: char,
+    highlight_colors: Option<Colors>,
 }
 
 fn main() {
@@ -237,6 +241,10 @@ fn main() {
         replacement_char: match args.unicode_replacement_char {
             true => REPLACEMENT_CHARACTER,
             false => '.',
+        },
+        highlight_colors: match args.no_colors {
+            true => None,
+            false => Some(Colors::new(Color::White, Color::DarkGrey)),
         },
     };
 
