@@ -396,12 +396,12 @@ impl Screen {
             terminal::Clear(terminal::ClearType::CurrentLine)
         )?;
 
-        let mode = self.editor_mode.to_string();
+        let mode = self.editor_mode.name();
         queue!(
             self.stdout,
             cursor::MoveTo((SCREEN_WIDTH - mode.len()).try_into().unwrap(), 0)
         )?;
-        write!(self.stdout, "{}", &mode)?;
+        write!(self.stdout, "{}", mode)?;
 
         queue!(self.stdout, cursor::MoveTo(0, self.height as u16 - 1))?;
         queue!(

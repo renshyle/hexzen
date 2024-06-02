@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{
     char::{self, REPLACEMENT_CHARACTER},
     cmp, fs,
@@ -36,18 +35,12 @@ impl EditorMode {
             EditorMode::TextMode => EditorMode::HexMode,
         }
     }
-}
 
-impl fmt::Display for EditorMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                EditorMode::HexMode => "normal",
-                EditorMode::TextMode => "text",
-            }
-        )
+    pub fn name(&self) -> &'static str {
+        match self {
+            EditorMode::HexMode => "normal",
+            EditorMode::TextMode => "text",
+        }
     }
 }
 
