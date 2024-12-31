@@ -75,6 +75,7 @@ impl Screen {
         terminal::enable_raw_mode()?;
         queue!(self.stdout, terminal::EnterAlternateScreen)?;
         queue!(self.stdout, terminal::Clear(terminal::ClearType::All))?;
+        queue!(self.stdout, cursor::SetCursorStyle::SteadyBlock)?;
         self.draw()?;
 
         while self.running {
@@ -565,6 +566,7 @@ impl Screen {
 impl Drop for Screen {
     fn drop(&mut self) {
         terminal::disable_raw_mode().unwrap();
+        execute!(self.stdout, cursor::SetCursorStyle::DefaultUserShape).unwrap();
         execute!(self.stdout, terminal::LeaveAlternateScreen).unwrap();
     }
 }
